@@ -3,7 +3,7 @@
 // ycapture.h : Filter definition
 
 // Filter name
-#define NAME_CAPTURESOURCE L"RealSense Direct Show Source"
+#define NAME_CAPTURESOURCE L"RealSenseDS"
 
 // {5C2CD55C-92AD-4999-8666-912BD3E70001}
 DEFINE_GUID(CLSID_CaptureSource, 

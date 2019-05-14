@@ -14,18 +14,67 @@ int _tmain(int argc, _TCHAR* argv[])
 	// RealSense initialization
 	auto image_width = 848;
 	auto image_height = 480;
+	auto frame_rate = 30;
 
 	auto min_depth = 0.29f;
-	auto max_depth = 4.0f;
+	auto max_depth = 16.0f;
+
+	auto exposure_time = 0;
+	auto gain = 16;
+
+	auto emitter_power = 0.0f;
+
+	if (argc >= 3)
+	{
+		image_width = atoi(argv[1]);
+		image_height = atoi(argv[2]);
+	}
+
+	if (argc >= 5)
+	{
+		min_depth = atof(argv[3]);
+		max_depth = atof(argv[4]);
+	}
+
+	if (argc >= 7)
+	{
+		exposure_time = static_cast<int>(atof(argv[5]) * 1000);
+		gain = atoi(argv[6]);
+	}
+
+	if (argc >= 8)
+	{
+		emitter_power = atoi(argv[7]);
+	}
 
 	// Declare RealSense pipeline, encapsulating the actual device and sensors
 	rs2::pipeline pipe;
 	rs2::config cfg;
 	// Use a configuration object to request only depth from the pipeline
-	cfg.enable_stream(RS2_STREAM_DEPTH, image_width, image_height, RS2_FORMAT_Z16, 30);
-	cfg.enable_stream(RS2_STREAM_COLOR, image_width, image_height, RS2_FORMAT_RGB8, 30);
+	cfg.enable_stream(RS2_STREAM_DEPTH, image_width, image_height, RS2_FORMAT_Z16, frame_rate);
+	cfg.enable_stream(RS2_STREAM_COLOR, image_width, image_height, RS2_FORMAT_RGB8, frame_rate);
 	// Start streaming with the above configuration
 	pipe.start(cfg);
+
+	rs2::sensor ir_sensor;
+	auto active_sensors = pipe.get_active_profile().get_device().query_sensors();
+	for (auto target_sensor : active_sensors)
+	{
+		if (strcmp(target_sensor.get_info(rs2_camera_info::RS2_CAMERA_INFO_NAME), "Stereo Module") == 0) { ir_sensor = target_sensor; }
+	}
+
+	// stereo camera settings
+	ir_sensor.set_option(rs2_option::RS2_OPTION_GAIN, gain);
+	ir_sensor.set_option(rs2_option::RS2_OPTION_LASER_POWER, emitter_power);
+	if (exposure_time > 0)
+	{
+		ir_sensor.set_option(rs2_option::RS2_OPTION_ENABLE_AUTO_EXPOSURE, 0);
+		ir_sensor.set_option(rs2_option::RS2_OPTION_EXPOSURE, exposure_time);
+	}
+	else
+	{
+		ir_sensor.set_option(rs2_option::RS2_OPTION_ENABLE_AUTO_EXPOSURE, 1);
+	}
 
 	// Declare filters
 	rs2::threshold_filter thr_filter;   // Threshold  - removes values outside recommended range
@@ -37,8 +86,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	rs2::align align_to_color(RS2_STREAM_COLOR);
 
 	// filter settings
-	thr_filter.set_option(RS2_OPTION_MIN_DISTANCE, 0.1f);
-	thr_filter.set_option(RS2_OPTION_MAX_DISTANCE, 1.5f);
+	thr_filter.set_option(RS2_OPTION_MIN_DISTANCE, min_depth);
+	thr_filter.set_option(RS2_OPTION_MAX_DISTANCE, max_depth);
 	spat_filter.set_option(RS2_OPTION_FILTER_MAGNITUDE, 2.0f);
 	spat_filter.set_option(RS2_OPTION_FILTER_SMOOTH_ALPHA, 0.5f);
 	spat_filter.set_option(RS2_OPTION_FILTER_SMOOTH_DELTA, 20.0f);
@@ -47,8 +96,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	// color filter setting
 	color_filter.set_option(RS2_OPTION_HISTOGRAM_EQUALIZATION_ENABLED, 0);
 	color_filter.set_option(RS2_OPTION_COLOR_SCHEME, 9.0f);
-	color_filter.set_option(RS2_OPTION_MAX_DISTANCE, max_depth);
 	color_filter.set_option(RS2_OPTION_MIN_DISTANCE, min_depth);
+	color_filter.set_option(RS2_OPTION_MAX_DISTANCE, max_depth);
 
 	// Declaring two concurrent queues that will be used to push and pop frames from different threads
 	rs2::frame_queue original_data;
