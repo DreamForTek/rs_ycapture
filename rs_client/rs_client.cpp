@@ -7,6 +7,7 @@
 
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
+#include <Windows.h>
 
 // Resolution will be changed by command line option
 int _tmain(int argc, _TCHAR* argv[])
@@ -17,7 +18,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	auto frame_rate = 30;
 
 	auto min_depth = 0.29f;
-	auto max_depth = 16.0f;
+	auto max_depth = 10.0f;
 
 	auto exposure_time = 0;
 	auto gain = 16;
@@ -113,6 +114,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	auto depth_mat = cv::Mat(cv::Size(image_width, image_height), CV_16U);
 
 	auto i = 0; // frame counter
+/*
+	// remove frame
+	cv::namedWindow("RealSense image", 0);
+//	cv::setWindowProperty("RealSense image", CV_WND_PROP_FULLSCREEN, CV_WINDOW_KEEPRATIO);
+	HWND hwnd = FindWindow(0, "RealSense image");
+	SetWindowLongPtr(hwnd, GWL_STYLE, WS_POPUP); //WS_THICKFRAME or WS_POPUP 
+	SetWindowPos(hwnd, NULL, 100, 100, image_width, image_height * 2, SWP_DRAWFRAME | SWP_SHOWWINDOW | SWP_FRAMECHANGED);
+	SetClassLongPtr(hwnd, GCLP_HBRBACKGROUND, (LONG)CreateSolidBrush(RGB(0, 0, 0)));
+*/
+	auto is_record = false;
+	auto video_writer = cv::VideoWriter("capture.mp4", cv::VideoWriter::fourcc('H', '2', '6', '4'), 30, cv::Size(image_width, image_height * 2));
 
 	while (true)
 	{
@@ -127,7 +139,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		depth_frame = thr_filter.process(depth_frame);
 		depth_frame = depth_to_disparity.process(depth_frame);
 		depth_frame = spat_filter.process(depth_frame);
-//		depth_frame = temp_filter.process(depth_frame);
+		//		depth_frame = temp_filter.process(depth_frame);
 		depth_frame = color_filter.process(depth_frame);
 
 		rs2::video_frame color_frame = current_frame.get_color_frame(); //Take the color frame from the frameset
@@ -135,7 +147,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		memcpy(image_mat.data, color_frame.get_data(), sizeof(unsigned char) * image_width * image_height * 3);
 		memcpy(&(image_mat.data[image_width * image_height * 3]), depth_frame.get_data(), sizeof(unsigned char) * image_width * image_height * 3);
 
-		cv::cvtColor(image_mat, display_mat, CV_BGR2RGB);
+		cv::cvtColor(image_mat, display_mat, cv::COLOR_BGR2RGB);
 		cv::imshow("RealSense image", display_mat);
 
 		// upside down flip
@@ -145,6 +157,11 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		auto in_key = cv::waitKey(1);
 		if (in_key == 27) { break; } // ESC to escape
+		if (in_key == 's') { is_record = !is_record; }
+
+		if (is_record) {
+			video_writer << display_mat;
+		}
 
 		// Transmit data
 		HRESULT hr = sender.Send(i * avgTimePF, image_width, image_height * 2, send_data);
